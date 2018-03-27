@@ -5,6 +5,10 @@ module ActiveDynamic
       include ActiveDynamic::HasDynamicAttributes
     end
 
+    def has_dynamic_definitions
+      include ActiveDynamic::HasDynamicDefinitions
+    end
+
   end
 end
 

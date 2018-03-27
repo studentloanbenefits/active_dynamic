@@ -1,26 +1,27 @@
+require 'sanitize'
+
 module ActiveDynamic
-  class AttributeDefinition
+  class AttributeDefinition < ActiveRecord::Base
+    has_many :active_dynamic_attributes, class_name: 'ActiveDynamic::Attribute', dependent: :destroy, foreign_key: :active_dynamic_definition_id
+    validates :name, :datatype, :field_definable_id, :field_definable_type, presence: true
 
-    attr_reader :display_name, :datatype, :value, :name, :required
+    before_validation :sanitize
 
-    def initialize(display_name, params = {})
-      options = params.dup
-      @name = (options.delete(:system_name) || display_name).parameterize.underscore
-      @display_name = display_name
-      @datatype = options.delete(:datatype)
-      @value = options.delete(:default_value)
-      @required = options.delete(:required) || false
+    validate :cannot_be_reserved_word, :no_greater_than_32
 
-      # custom attributes from Provider
-      options.each do |key, value|
-        self.instance_variable_set("@#{key}", value)
-        self.class.send(:attr_reader, key)
-      end
+    self.table_name = :active_dynamic_definitions
+
+    def cannot_be_reserved_word
+      errors.add(:name, "Field name, '#{name}', is not allowed.") if respond_to?(name)
     end
 
-    def required?
-      !!@required
+    def no_greater_than_32
+      errors.add(:name, "Field name must be between 3 and 32 characters") if name.length > 32 || name.length < 3
     end
 
+    def sanitize
+      # strip all html. Remove all whitespace
+      self.name = Sanitize.fragment(self.name.gsub(/\s+/, ''))
+    end
   end
 end

@@ -11,32 +11,28 @@ module ActiveDynamic
       before_save :save_dynamic_attributes
     end
 
-    def dynamic_attributes
-      if persisted? && any_dynamic_attributes?
-        should_resolve_persisted? ? resolve_combined : resolve_from_db
-      else
-        resolve_from_provider
-      end
+    def dynamic_field_definitions
+      resolve_from_provider
     end
 
-    def dynamic_attributes_loaded?
-      @dynamic_attributes_loaded ||= false
+    def dynamic_field_definitions_loaded?
+      @dynamic_field_definitions_loaded ||= false
     end
 
     def respond_to?(method_name, include_private = false)
       if super
         true
       else
-        load_dynamic_attributes unless dynamic_attributes_loaded?
-        dynamic_attributes.find { |attr| attr.name == method_name.to_s.delete('=') }.present?
+        load_dynamic_field_definitions unless dynamic_field_definitions_loaded?
+        dynamic_field_definitions.find { |attr| attr.name == method_name.to_s.delete('=') }.present?
       end
     end
 
     def method_missing(method_name, *arguments, &block)
-      if dynamic_attributes_loaded?
+      if dynamic_field_definitions_loaded?
         super
       else
-        load_dynamic_attributes
+        load_dynamic_field_definitions
         send(method_name, *arguments, &block)
       end
     end
@@ -59,33 +55,20 @@ module ActiveDynamic
       active_dynamic_attributes.any?
     end
 
-    def resolve_combined
-      attributes = resolve_from_db
-      resolve_from_provider.each do |attribute|
-        attributes << ActiveDynamic::Attribute.new(attribute.as_json) unless attributes.find { |attr| attr.name == attribute.name }
-      end
-      attributes
-    end
-
-    def resolve_from_db
-      active_dynamic_attributes
-    end
-
     def resolve_from_provider
       ActiveDynamic.configuration.provider_class.new(self).call
     end
 
     def generate_accessors(fields)
-      fields.each do |field|
+      fields.each do |field_def|
+        add_presence_validator(field_def.name) if field_def.required?
 
-        add_presence_validator(field.name) if field.required?
-
-        define_singleton_method(field.name) do
-          _custom_fields[field.name]
+        define_singleton_method(field_def.name) do
+          _custom_fields[field_def.name]
         end
 
-        define_singleton_method("#{field.name}=") do |value|
-          _custom_fields[field.name] = value && value.to_s.strip
+        define_singleton_method("#{field_def.name}=") do |value|
+          _custom_fields[field_def.name] = value && value.to_s.strip
         end
 
       end
@@ -101,23 +84,25 @@ module ActiveDynamic
       @_custom_fields ||= ActiveSupport::HashWithIndifferentAccess.new
     end
 
-    def load_dynamic_attributes
-      dynamic_attributes.each do |ticket_field|
-        _custom_fields[ticket_field.name] = ticket_field.value
+    def load_dynamic_field_definitions
+      dynamic_field_definitions.each do |ticket_field|
+        dynamic_field = ActiveDynamic::Attribute.where(customizable_id: id, active_dynamic_definition_id: ticket_field.id)
+        value = dynamic_field.any? ? dynamic_field.first.value : nil
+        _custom_fields[ticket_field.name] = value
       end
 
-      generate_accessors dynamic_attributes
-      @dynamic_attributes_loaded = true
+      generate_accessors dynamic_field_definitions
+      @dynamic_field_definitions_loaded = true
     end
 
     def save_dynamic_attributes
-      dynamic_attributes.each do |field|
-        next unless _custom_fields[field.name]
-        attr = active_dynamic_attributes.find_or_initialize_by(field.as_json)
+      dynamic_field_definitions.each do |field_def|
+        next unless _custom_fields[field_def.name]
+        attr = active_dynamic_attributes.find_or_initialize_by(customizable_id: id, customizable_type: self.class.name, active_dynamic_definition_id: field_def.id)
         if persisted?
-          attr.update(value: _custom_fields[field.name])
+          attr.update(value: _custom_fields[field_def.name])
         else
-          attr.assign_attributes(value: _custom_fields[field.name])
+          attr.assign_attributes(value: _custom_fields[field_def.name])
         end
       end
     end
