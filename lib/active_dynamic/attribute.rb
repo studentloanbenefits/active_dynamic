@@ -1,4 +1,4 @@
-require 'sanitize'
+require 'loofah'
 
 module ActiveDynamic
   class Attribute < ActiveRecord::Base
@@ -17,7 +17,7 @@ module ActiveDynamic
 
     def sanitize
       # strip all html. Remove all whitespace
-      self.value = Sanitize.fragment(self.value)
+      self.value = Loofah.document(self.value).scrub!(:prune).text
     end
   end
 end

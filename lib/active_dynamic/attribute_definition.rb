@@ -1,4 +1,4 @@
-require 'sanitize'
+require 'loofah'
 
 module ActiveDynamic
   class AttributeDefinition < ActiveRecord::Base
@@ -7,7 +7,7 @@ module ActiveDynamic
 
     before_validation :sanitize
 
-    validate :cannot_be_reserved_word, :no_greater_than_32
+    validate :cannot_be_reserved_word, :no_greater_than_32, :cannot_violate_ruby_method_restrictions
 
     self.table_name = :active_dynamic_definitions
 
@@ -15,13 +15,19 @@ module ActiveDynamic
       errors.add(:name, "Field name, '#{name}', is not allowed.") if respond_to?(name)
     end
 
+    def cannot_violate_ruby_method_restrictions
+      if !/((?=!|\?|=|\*|~)|^([A-Z]|[0-9]))/.match(self.name).nil?
+        errors.add(:name, "Field cannot start with a number or capital, and cannot contain the characters !,?,~,=,*")
+      end
+    end
+
     def no_greater_than_32
-      errors.add(:name, "Field name must be between 3 and 32 characters") if name.length > 32 || name.length < 3
+      errors.add(:name, "Field name must be between 3 and 20 characters") if name.length > 20 || name.length < 3
     end
 
     def sanitize
       # strip all html. Remove all whitespace
-      self.name = Sanitize.fragment(self.name.gsub(/\s+/, ''))
+      self.name =Loofah.document(self.name.gsub(/\s+/, '')).scrub!(:prune).text
     end
   end
 end
