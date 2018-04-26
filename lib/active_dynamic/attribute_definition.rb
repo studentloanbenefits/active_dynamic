@@ -7,7 +7,7 @@ module ActiveDynamic
 
     before_validation :sanitize
 
-    validate :cannot_be_reserved_word, :no_greater_than_32, :cannot_violate_ruby_method_restrictions
+    validate :cannot_be_reserved_word, :no_greater_than_32, :cannot_violate_ruby_method_restrictions, :cannot_be_duplicate
 
     self.table_name = :active_dynamic_definitions
 
@@ -23,6 +23,12 @@ module ActiveDynamic
 
     def no_greater_than_32
       errors.add(:name, "Field name must be between 3 and 20 characters") if name.length > 20 || name.length < 3
+    end
+
+    def cannot_be_duplicate
+      if ActiveDynamic::AttributeDefinition.where(name: name).any?
+        errors.add(:name, "Field has already been taken")
+      end
     end
 
     def sanitize
