@@ -26,7 +26,7 @@ module ActiveDynamic
     end
 
     def cannot_be_duplicate
-      if ActiveDynamic::AttributeDefinition.where(name: name).any?
+      if ActiveDynamic::AttributeDefinition.where(field_definable_id: field_definable_id, name: name).any?
         errors.add(:name, "Field has already been taken")
       end
     end
